@@ -225,6 +225,28 @@ const Dashboard = () => {
     toast.success(bot ? "Bot updated" : "Bot saved — continue to step 3");
   };
 
+  const handleAutofill = async () => {
+    const tok = autofillToken.trim();
+    if (!tok) return toast.error("Paste your bot token first");
+    setAutofilling(true);
+    const { data, error } = await supabase.functions.invoke("discord-bot-admin", {
+      body: { action: "autofill", bot_token: tok },
+    });
+    setAutofilling(false);
+    if (error || !data?.ok) {
+      toast.error(data?.error ?? error?.message ?? "Autofill failed");
+      return;
+    }
+    const b = data.bot as Bot;
+    setBot(b);
+    setAppId(b.application_id);
+    setPubKey(b.public_key);
+    setToken(b.bot_token);
+    setName(b.bot_name ?? "");
+    setAutofillToken("");
+    toast.success(`Autofilled from Discord — ${b.bot_name ?? "bot"} ready to verify`);
+  };
+
   const handleVerify = async () => {
     if (!bot) return;
     setVerifying(true);
