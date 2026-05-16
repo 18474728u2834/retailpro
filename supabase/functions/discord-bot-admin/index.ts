@@ -51,7 +51,58 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: "Unauthorized" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const { action, bot_id } = await req.json();
+    const body = await req.json();
+    const { action } = body;
+
+    // --- autofill: only a bot token is needed; we fetch the app from Discord and upsert the bot row
+    if (action === "autofill") {
+      const bot_token = (body.bot_token ?? "").trim();
+      if (!bot_token) return json({ error: "bot_token required" }, 400);
+
+      // Fetch the application info using the bot token
+      const appRes = await fetch(`${DISCORD_API}/oauth2/applications/@me`, {
+        headers: { Authorization: `Bot ${bot_token}` },
+      });
+      if (!appRes.ok) {
+        const txt = await appRes.text();
+        return json({ ok: false, error: `Discord rejected the bot token (${appRes.status}): ${txt}` }, 400);
+      }
+      const app = await appRes.json();
+      if (!app?.id || !app?.verify_key) {
+        return json({ ok: false, error: "Discord didn't return application id / public key for this token." }, 400);
+      }
+
+      // Also fetch the bot user for username
+      const meRes = await fetch(`${DISCORD_API}/users/@me`, {
+        headers: { Authorization: `Bot ${bot_token}` },
+      });
+      const me = meRes.ok ? await meRes.json() : null;
+
+      const { data: existing } = await admin
+        .from("bots").select("*").eq("owner_user_id", user.id).maybeSingle();
+
+      const payload = {
+        owner_user_id: user.id,
+        application_id: String(app.id),
+        public_key: String(app.verify_key),
+        bot_token,
+        bot_name: me?.username ?? app.name ?? null,
+        status: "active",
+      };
+
+      const upsert = existing
+        ? await admin.from("bots").update(payload).eq("id", existing.id).select().single()
+        : await admin.from("bots").insert(payload).select().single();
+      if (upsert.error) return json({ ok: false, error: upsert.error.message }, 400);
+
+      return json({
+        ok: true,
+        bot: upsert.data,
+        app: { id: app.id, name: app.name, icon: app.icon },
+      });
+    }
+
+    const bot_id = body.bot_id;
     if (!bot_id) return json({ error: "bot_id required" }, 400);
 
     const { data: bot, error: botErr } = await admin
