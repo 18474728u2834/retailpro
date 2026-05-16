@@ -135,6 +135,8 @@ const Dashboard = () => {
   const [aiChannels, setAiChannels] = useState<string[]>(["", "", "", ""]);
   const [savingAi, setSavingAi] = useState(false);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [autofillToken, setAutofillToken] = useState("");
+  const [autofilling, setAutofilling] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate("/", { replace: true });
