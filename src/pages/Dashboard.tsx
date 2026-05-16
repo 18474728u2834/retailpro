@@ -593,6 +593,10 @@ const Dashboard = () => {
                 or fill manually
               </span>
             </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Bot name <span className="text-muted-foreground font-normal">(optional)</span></Label>
                 <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Modmail Bot" />
               </div>
               <div className="space-y-2">
