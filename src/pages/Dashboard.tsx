@@ -135,6 +135,8 @@ const Dashboard = () => {
   const [aiChannels, setAiChannels] = useState<string[]>(["", "", "", ""]);
   const [savingAi, setSavingAi] = useState(false);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [autofillToken, setAutofillToken] = useState("");
+  const [autofilling, setAutofilling] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate("/", { replace: true });
@@ -221,6 +223,28 @@ const Dashboard = () => {
     if (error) return toast.error(error.message);
     setBot(data as Bot);
     toast.success(bot ? "Bot updated" : "Bot saved — continue to step 3");
+  };
+
+  const handleAutofill = async () => {
+    const tok = autofillToken.trim();
+    if (!tok) return toast.error("Paste your bot token first");
+    setAutofilling(true);
+    const { data, error } = await supabase.functions.invoke("discord-bot-admin", {
+      body: { action: "autofill", bot_token: tok },
+    });
+    setAutofilling(false);
+    if (error || !data?.ok) {
+      toast.error(data?.error ?? error?.message ?? "Autofill failed");
+      return;
+    }
+    const b = data.bot as Bot;
+    setBot(b);
+    setAppId(b.application_id);
+    setPubKey(b.public_key);
+    setToken(b.bot_token);
+    setName(b.bot_name ?? "");
+    setAutofillToken("");
+    toast.success(`Autofilled from Discord — ${b.bot_name ?? "bot"} ready to verify`);
   };
 
   const handleVerify = async () => {
@@ -540,6 +564,36 @@ const Dashboard = () => {
             <CardDescription>Stored encrypted, only used to talk to Discord on your behalf.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="rounded-lg border border-accent/40 bg-accent/5 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-accent" />
+                <span className="text-sm font-medium">Quick setup — paste your bot token</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                We'll fetch your Application ID, Public Key and bot name from Discord automatically.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  value={autofillToken}
+                  onChange={(e) => setAutofillToken(e.target.value)}
+                  placeholder="Paste bot token (MTI…)"
+                  type="password"
+                  className="font-mono text-xs"
+                />
+                <Button onClick={handleAutofill} disabled={autofilling || !autofillToken.trim()} className="sm:min-w-[160px]">
+                  {autofilling ? "Fetching…" : "Autofill from token"}
+                  {!autofilling && <Sparkles className="ml-2 h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Separator />
+              <span className="absolute left-1/2 -translate-x-1/2 -top-2.5 bg-card px-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                or fill manually
+              </span>
+            </div>
+
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Bot name <span className="text-muted-foreground font-normal">(optional)</span></Label>

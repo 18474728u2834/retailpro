@@ -175,6 +175,15 @@ async function relayUserMessageToChannel(channel, user, content, files) {
 
 // Ask the edge function for an AI reply; if confident, DM the user and post in the ticket channel.
 async function tryAiReply(ctx, cfg, ticket, channel, user, userMessage) {
+  // If this ticket has already been escalated, the AI should never respond again.
+  const { data: prior } = await db
+    .from('ai_replies')
+    .select('id')
+    .eq('ticket_id', ticket.id)
+    .eq('escalated', true)
+    .limit(1);
+  if (prior && prior.length > 0) return;
+
   const url = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/ai-modmail-reply`;
   const res = await fetch(url, {
     method: 'POST',
@@ -194,6 +203,7 @@ async function tryAiReply(ctx, cfg, ticket, channel, user, userMessage) {
   }
   const data = await res.json();
   if (!data?.should_reply || !data?.reply) {
+    // Escalated — notify staff in channel, notify user in DM, then stop replying.
     if (data?.reason) {
       try {
         await channel.send({
@@ -205,6 +215,19 @@ async function tryAiReply(ctx, cfg, ticket, channel, user, userMessage) {
           ],
         });
       } catch {}
+    }
+    try {
+      await user.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('Escalated to staff')
+            .setDescription("Your ticket has been escalated to our staff team. A human will get back to you shortly — no need to repeat yourself.")
+            .setColor(0xfaa61a)
+            .setTimestamp(new Date()),
+        ],
+      });
+    } catch (e) {
+      console.error(`[${ctx.botRow.id}] DM escalation notice failed`, e);
     }
     return;
   }
@@ -458,19 +481,32 @@ function attachHandlers(ctx) {
       const guildId = interaction.customId.slice(4);
       const categoryId = interaction.values[0];
 
-      // Acknowledge immediately
-      try { await interaction.deferUpdate(); } catch (e) {
-        console.error(`[${ctx.botRow.id}] deferUpdate`, e);
+      // Acknowledge immediately so Discord doesn't show "This interaction failed".
+      let acked = false;
+      try {
+        await interaction.deferUpdate();
+        acked = true;
+      } catch (e) {
+        console.error(`[${ctx.botRow.id}] deferUpdate failed`, e);
       }
+      const safeFollowUp = async (content) => {
+        try {
+          if (acked) await interaction.followUp({ content, ephemeral: true });
+          else await interaction.reply({ content, ephemeral: true });
+        } catch (err) {
+          console.error(`[${ctx.botRow.id}] followUp failed`, err);
+          try { await interaction.user.send(content); } catch {}
+        }
+      };
 
       const cfg = await getGuildConfig(ctx, guildId);
       if (!cfg) {
-        try { await interaction.followUp({ content: 'This bot is no longer configured for that server.', ephemeral: true }); } catch {}
+        await safeFollowUp('This bot is no longer configured for that server.');
         return;
       }
       const guild = await client.guilds.fetch(cfg.guild_id).catch(() => null);
       if (!guild) {
-        try { await interaction.followUp({ content: 'Server unavailable.', ephemeral: true }); } catch {}
+        await safeFollowUp('Server unavailable.');
         return;
       }
 
