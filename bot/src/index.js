@@ -481,19 +481,32 @@ function attachHandlers(ctx) {
       const guildId = interaction.customId.slice(4);
       const categoryId = interaction.values[0];
 
-      // Acknowledge immediately
-      try { await interaction.deferUpdate(); } catch (e) {
-        console.error(`[${ctx.botRow.id}] deferUpdate`, e);
+      // Acknowledge immediately so Discord doesn't show "This interaction failed".
+      let acked = false;
+      try {
+        await interaction.deferUpdate();
+        acked = true;
+      } catch (e) {
+        console.error(`[${ctx.botRow.id}] deferUpdate failed`, e);
       }
+      const safeFollowUp = async (content) => {
+        try {
+          if (acked) await interaction.followUp({ content, ephemeral: true });
+          else await interaction.reply({ content, ephemeral: true });
+        } catch (err) {
+          console.error(`[${ctx.botRow.id}] followUp failed`, err);
+          try { await interaction.user.send(content); } catch {}
+        }
+      };
 
       const cfg = await getGuildConfig(ctx, guildId);
       if (!cfg) {
-        try { await interaction.followUp({ content: 'This bot is no longer configured for that server.', ephemeral: true }); } catch {}
+        await safeFollowUp('This bot is no longer configured for that server.');
         return;
       }
       const guild = await client.guilds.fetch(cfg.guild_id).catch(() => null);
       if (!guild) {
-        try { await interaction.followUp({ content: 'Server unavailable.', ephemeral: true }); } catch {}
+        await safeFollowUp('Server unavailable.');
         return;
       }
 
