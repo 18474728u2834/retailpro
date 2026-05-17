@@ -1101,3 +1101,57 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
+
+function RevealServiceKey() {
+  const [data, setData] = useState<{ SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const reveal = async () => {
+    setLoading(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("reveal-service-key");
+      if (error) throw error;
+      if (res?.error) throw new Error(res.error);
+      setData(res);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to reveal key");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copy = async (label: string, value: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopied(label);
+    setTimeout(() => setCopied(null), 1500);
+  };
+
+  if (!data) {
+    return (
+      <Button onClick={reveal} disabled={loading} variant="outline">
+        <Eye className="h-4 w-4 mr-2" />
+        {loading ? "Loading…" : "Reveal service key"}
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {[
+        ["SUPABASE_URL", data.SUPABASE_URL],
+        ["SUPABASE_SERVICE_ROLE_KEY", data.SUPABASE_SERVICE_ROLE_KEY],
+      ].map(([label, value]) => (
+        <div key={label} className="rounded-lg border border-border bg-background p-3">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-xs font-medium text-muted-foreground">{label}</span>
+            <Button size="sm" variant="ghost" onClick={() => copy(label, value)} className="h-7">
+              {copied === label ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+          <div className="font-mono text-xs break-all">{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
