@@ -691,6 +691,21 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
+        {/* Temporary: reveal service key for Railway setup */}
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="h-4 w-4" /> Railway env vars (one-time)
+            </CardTitle>
+            <CardDescription>
+              Click reveal, copy both values into Railway, then tell Lovable to delete this section.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RevealServiceKey />
+          </CardContent>
+        </Card>
+
         {/* Step 4 — Server configuration */}
         <Card className={!isReady ? "opacity-60 pointer-events-none" : ""}>
           <CardHeader>
